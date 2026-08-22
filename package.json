@@ -1,0 +1,49 @@
+{
+  "name": "nesora-api",
+  "version": "1.0.0",
+  "description": "Nesora NestJS REST API backend for mobile",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main",
+    "test": "jest",
+    "test:e2e": "jest --config ./test/jest-e2e.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/platform-express": "^10.4.15",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/passport": "^10.0.3",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/throttler": "^6.4.0",
+    "@prisma/adapter-neon": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@upstash/redis": "^1.38.0",
+    "@aws-sdk/client-ivs": "^3.1078.0",
+    "expo-server-sdk": "^3.14.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "bcryptjs": "^3.0.3",
+    "class-validator": "^0.14.1",
+    "class-transformer": "^0.5.1",
+    "zod": "^4.4.3",
+    "cloudinary": "^2.10.0",
+    "resend": "^6.12.4",
+    "rxjs": "^7.8.1",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.9",
+    "@nestjs/testing": "^10.4.15",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.1",
+    "@types/node": "^20.17.57",
+    "@types/passport-jwt": "^4.0.1",
+    "prisma": "^7.8.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
