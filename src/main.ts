@@ -11,7 +11,7 @@ async function bootstrap() {
 
   // CORS — allow mobile app origin + web app
   app.enableCors({
-    origin: ['http://localhost:3000', 'https://nesora.org', /^exp:\/\//],
+    origin: ['http://localhost:3000', 'https://nesora.org', 'https://nesora-api-xi.vercel.app', /^exp:\/\//],
     credentials: true,
   })
 
