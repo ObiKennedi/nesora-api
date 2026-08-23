@@ -204,4 +204,81 @@ export class AuthService {
 
     return { message: 'Password reset successfully. You can now log in.' }
   }
+
+  // ── Google OAuth Login ──────────────────────────────────────────────────
+
+  async googleLogin(data: {
+    email: string
+    name?: string
+    image?: string
+    googleId?: string
+    idToken?: string
+  }) {
+    if (!data.email) throw new BadRequestException('Email is required.')
+
+    let user = await this.prisma.user.findUnique({ where: { email: data.email } })
+
+    if (user?.isSuspended) throw new UnauthorizedException('Your account has been suspended.')
+
+    if (!user) {
+      const nameParts = (data.name || 'User').trim().split(' ')
+      const firstName = nameParts[0] || 'User'
+      const lastName = nameParts.slice(1).join(' ') || ''
+      const base = `${firstName}${lastName}`.toLowerCase().replace(/[^a-z0-9]/g, '') || 'user'
+      let username = `${base}${Math.floor(1000 + Math.random() * 9000)}`
+      const conflict = await this.prisma.user.findUnique({ where: { username } })
+      if (conflict) username = `${base}${Date.now().toString().slice(-6)}`
+
+      user = await this.prisma.user.create({
+        data: {
+          email: data.email,
+          firstName,
+          lastName,
+          name: data.name || `${firstName} ${lastName}`.trim(),
+          username,
+          image: data.image || null,
+          emailVerified: new Date(),
+        },
+      })
+    } else if (!user.emailVerified) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: new Date() },
+      })
+    }
+
+    if (data.googleId) {
+      await this.prisma.account.upsert({
+        where: {
+          provider_providerAccountId: {
+            provider: 'google',
+            providerAccountId: data.googleId,
+          },
+        },
+        create: {
+          userId: user.id,
+          type: 'oauth',
+          provider: 'google',
+          providerAccountId: data.googleId,
+          id_token: data.idToken,
+        },
+        update: {
+          id_token: data.idToken,
+        },
+      }).catch(() => {})
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+        image: user.image,
+        role: user.role,
+        onboardingType: user.onboardingType,
+      },
+      ...this.tokens(user),
+    }
+  }
 }

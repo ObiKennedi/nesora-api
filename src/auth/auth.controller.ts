@@ -2,7 +2,7 @@ import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common'
 import { AuthService } from './auth.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser } from '../common/decorators/user.decorator'
-import { IsEmail, IsString, MinLength } from 'class-validator'
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
 
 class RegisterDto {
   @IsEmail() email: string
@@ -14,6 +14,14 @@ class RegisterDto {
 class LoginDto {
   @IsEmail() email: string
   @IsString() password: string
+}
+
+class GoogleLoginDto {
+  @IsEmail() email: string
+  @IsOptional() @IsString() name?: string
+  @IsOptional() @IsString() image?: string
+  @IsOptional() @IsString() googleId?: string
+  @IsOptional() @IsString() idToken?: string
 }
 
 class RefreshDto {
@@ -45,6 +53,11 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password)
+  }
+
+  @Post('google')
+  googleLogin(@Body() dto: GoogleLoginDto) {
+    return this.auth.googleLogin(dto)
   }
 
   @Post('refresh')
