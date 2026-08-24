@@ -163,6 +163,52 @@ export class AuthService {
     return { message: 'Email verified successfully.' }
   }
 
+  async checkVerification(email: string) {
+    if (!email) throw new BadRequestException('Email is required.')
+    const cleanEmail = email.toLowerCase().trim()
+    const user = await this.prisma.user.findUnique({
+      where: { email: cleanEmail },
+      select: { id: true, email: true, name: true, username: true, image: true, role: true, onboardingType: true, emailVerified: true },
+    })
+
+    if (!user) throw new NotFoundException('User not found.')
+
+    const verified = Boolean(user.emailVerified)
+    return {
+      verified,
+      user: verified ? user : null,
+      tokens: verified ? this.tokens(user) : null,
+    }
+  }
+
+  async resendVerification(email: string) {
+    if (!email) throw new BadRequestException('Email is required.')
+    const cleanEmail = email.toLowerCase().trim()
+    const user = await this.prisma.user.findUnique({ where: { email: cleanEmail } })
+    if (!user) return { message: 'If this email is registered, a verification link has been sent.' }
+    if (user.emailVerified) return { message: 'Email already verified.', verified: true }
+
+    const token = crypto.randomBytes(32).toString('hex')
+    await this.prisma.verificationToken.create({
+      data: {
+        identifier: cleanEmail,
+        token,
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    })
+
+    await resend.emails.send({
+      from: 'Nesora <noreply@nesora.org>',
+      to: cleanEmail,
+      subject: 'Verify your Nesora account',
+      html: `<p>Hi ${user.firstName}, click below to verify your email:</p>
+             <a href="${APP_URL}/verify-email?token=${token}">Verify Email</a>
+             <p>This link expires in 24 hours.</p>`,
+    })
+
+    return { message: 'Verification link resent successfully.' }
+  }
+
   // ── Forgot password ───────────────────────────────────────────────────────
 
   async forgotPassword(email: string) {
