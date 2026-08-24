@@ -101,7 +101,8 @@ export class AuthService {
   // ── Login ─────────────────────────────────────────────────────────────────
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } })
+    const cleanEmail = email.toLowerCase().trim()
+    const user = await this.prisma.user.findUnique({ where: { email: cleanEmail } })
     if (!user || !user.password) throw new UnauthorizedException('Invalid credentials.')
     if (!user.emailVerified) throw new UnauthorizedException('Please verify your email first.')
     if (user.isSuspended) throw new UnauthorizedException('Your account has been suspended.')
@@ -216,7 +217,8 @@ export class AuthService {
   }) {
     if (!data.email) throw new BadRequestException('Email is required.')
 
-    let user = await this.prisma.user.findUnique({ where: { email: data.email } })
+    const cleanEmail = data.email.toLowerCase().trim()
+    let user = await this.prisma.user.findUnique({ where: { email: cleanEmail } })
 
     if (user?.isSuspended) throw new UnauthorizedException('Your account has been suspended.')
 
@@ -231,7 +233,7 @@ export class AuthService {
 
       user = await this.prisma.user.create({
         data: {
-          email: data.email,
+          email: cleanEmail,
           firstName,
           lastName,
           name: data.name || `${firstName} ${lastName}`.trim(),
