@@ -73,29 +73,47 @@ export class AuthService {
         lastName: data.lastName,
         name: `${data.firstName} ${data.lastName}`,
         username,
+        emailVerified: new Date(),
+        wallet: { create: { balance: 0 } },
       },
     })
 
-    // Send verification email (reuses same token table as Next.js)
-    const token = crypto.randomBytes(32).toString('hex')
-    await this.prisma.verificationToken.create({
-      data: {
-        identifier: data.email,
-        token,
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    // Send verification/welcome email in background (non-blocking)
+    try {
+      const token = crypto.randomBytes(32).toString('hex')
+      await this.prisma.verificationToken.create({
+        data: {
+          identifier: data.email,
+          token,
+          expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      })
+
+      await resend.emails.send({
+        from: 'Nesora <noreply@nesora.org>',
+        to: data.email,
+        subject: 'Welcome to Nesora',
+        html: `<p>Hi ${data.firstName}, welcome to Nesora!</p>
+               <p>Click below to verify your email:</p>
+               <a href="${APP_URL}/verify-email?token=${token}">Verify Email</a>
+               <p>This link expires in 24 hours.</p>`,
+      })
+    } catch (mailErr) {
+      console.warn('Welcome/verification email sending failed:', mailErr)
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+        image: user.image,
+        role: user.role,
+        onboardingType: user.onboardingType,
       },
-    })
-
-    await resend.emails.send({
-      from: 'Nesora <noreply@nesora.org>',
-      to: data.email,
-      subject: 'Verify your Nesora account',
-      html: `<p>Hi ${data.firstName}, click below to verify your email:</p>
-             <a href="${APP_URL}/verify-email?token=${token}">Verify Email</a>
-             <p>This link expires in 24 hours.</p>`,
-    })
-
-    return { message: 'Registration successful. Check your email to verify your account.' }
+      ...this.tokens(user),
+    }
   }
 
   // ── Login ─────────────────────────────────────────────────────────────────
@@ -104,7 +122,6 @@ export class AuthService {
     const cleanEmail = email.toLowerCase().trim()
     const user = await this.prisma.user.findUnique({ where: { email: cleanEmail } })
     if (!user || !user.password) throw new UnauthorizedException('Invalid credentials.')
-    if (!user.emailVerified) throw new UnauthorizedException('Please verify your email first.')
     if (user.isSuspended) throw new UnauthorizedException('Your account has been suspended.')
 
     const valid = await bcrypt.compare(password, user.password)
