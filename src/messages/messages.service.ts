@@ -292,6 +292,109 @@ export class MessagesService {
     })
   }
 
+  async getCreatorMessageRequests(userId: string) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: { id: true },
+    })
+    if (!creator) return []
+
+    return this.prisma.messageRequest.findMany({
+      where: { toCreatorId: creator.id, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        fromUser: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            image: true,
+          },
+        },
+      },
+    })
+  }
+
+  async acceptMessageRequest(userId: string, requestId: string) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: { id: true },
+    })
+    if (!creator) return { error: 'Creator not found.' }
+
+    const request = await this.prisma.messageRequest.findFirst({
+      where: { id: requestId, toCreatorId: creator.id, status: 'PENDING' },
+    })
+    if (!request) return { error: 'Request not found or already processed.' }
+
+    let conversation = await this.prisma.conversation.findFirst({
+      where: { creatorId: creator.id, subscriberId: request.fromUserId },
+    })
+
+    if (!conversation) {
+      conversation = await this.prisma.conversation.create({
+        data: {
+          creatorId: creator.id,
+          subscriberId: request.fromUserId,
+        },
+      })
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.messageRequest.update({
+        where: { id: requestId },
+        data: { status: 'ACCEPTED' },
+      }),
+      this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: request.fromUserId,
+          type: 'TEXT',
+          content: request.message,
+        },
+      }),
+      this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          lastMessageAt: new Date(),
+          lastMessageText: request.message.slice(0, 100),
+        },
+      }),
+      this.prisma.notification.create({
+        data: {
+          userId: request.fromUserId,
+          type: 'NEW_MESSAGE',
+          title: 'Message request accepted!',
+          body: 'Your message request was accepted. You can now chat directly.',
+          href: `/messages/${conversation.id}`,
+        },
+      }),
+    ])
+
+    return { success: true, conversationId: conversation.id }
+  }
+
+  async declineMessageRequest(userId: string, requestId: string) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: { id: true },
+    })
+    if (!creator) return { error: 'Creator not found.' }
+
+    const request = await this.prisma.messageRequest.findFirst({
+      where: { id: requestId, toCreatorId: creator.id, status: 'PENDING' },
+    })
+    if (!request) return { error: 'Request not found.' }
+
+    await this.prisma.messageRequest.update({
+      where: { id: requestId },
+      data: { status: 'DECLINED' },
+    })
+
+    return { success: true }
+  }
+
   async getTotalUnread(userId: string) {
     const count = await redis.get<number>(keys.totalUnread(userId))
     return { count: count ?? 0 }

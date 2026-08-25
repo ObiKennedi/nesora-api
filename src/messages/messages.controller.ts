@@ -49,6 +49,27 @@ export class MessagesController {
     return this.messages.getFanMessageRequests(user.id)
   }
 
+  @Get('creator/requests')
+  getCreatorMessageRequests(@CurrentUser() user: any) {
+    return this.messages.getCreatorMessageRequests(user.id)
+  }
+
+  @Post('creator/requests/:requestId/accept')
+  acceptMessageRequest(
+    @CurrentUser() user: any,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.messages.acceptMessageRequest(user.id, requestId)
+  }
+
+  @Post('creator/requests/:requestId/decline')
+  declineMessageRequest(
+    @CurrentUser() user: any,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.messages.declineMessageRequest(user.id, requestId)
+  }
+
   @Get(':conversationId')
   getMessages(
     @CurrentUser() user: any,
