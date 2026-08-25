@@ -56,7 +56,7 @@ export class DiscoverService {
     let preferredCategories: string[] = []
     if (userId && !category) {
       try {
-        const affinities = await redis.zrevrange<string[]>(`user:affinity:${userId}`, 0, 2)
+        const affinities = await redis.zrange<string[]>(`user:affinity:${userId}`, 0, 2, { rev: true })
         if (affinities && affinities.length > 0) {
           preferredCategories = affinities
         } else {
