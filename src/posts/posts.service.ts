@@ -68,4 +68,90 @@ export class PostsService {
     await this.prisma.postSave.create({ data: { userId, postId } })
     return { saved: true }
   }
+
+  async createPost(userId: string, data: {
+    type: any
+    title?: string
+    body?: string
+    mediaUrls?: string[]
+    thumbnailUrl?: string
+    videoDuration?: number
+    accessLevel?: any
+    pollQuestion?: string
+    pollOptions?: string[]
+  }) {
+    // Find creator for user
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: { id: true },
+    })
+    if (!creator) return { error: 'Creator profile not found. Please activate creator portal.' }
+
+    const postType = data.type || 'PHOTO'
+    const accessLevel = data.accessLevel || 'PUBLIC'
+
+    const post = await this.prisma.post.create({
+      data: {
+        creatorId: creator.id,
+        type: postType,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+        title: data.title || null,
+        body: data.body || null,
+        mediaUrls: data.mediaUrls || [],
+        thumbnailUrl: data.thumbnailUrl || (data.mediaUrls && data.mediaUrls[0]) || null,
+        videoDuration: data.videoDuration || null,
+        access: {
+          create: {
+            accessLevel,
+            allowedPlanIds: [],
+          },
+        },
+        ...(postType === 'POLL' && data.pollOptions && data.pollOptions.length > 0
+          ? {
+              poll: {
+                create: {
+                  question: data.pollQuestion || data.title || 'Community Poll',
+                  options: {
+                    create: data.pollOptions.map((opt) => ({ text: opt })),
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      include: {
+        access: true,
+        poll: { include: { options: true } },
+      },
+    })
+
+    return { success: true, post }
+  }
+
+  async getMyPosts(userId: string, page = 1, limit = 20) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: { id: true },
+    })
+    if (!creator) return { posts: [], total: 0 }
+
+    const skip = (page - 1) * limit
+    const [posts, total] = await Promise.all([
+      this.prisma.post.findMany({
+        where: { creatorId: creator.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          access: true,
+          poll: { include: { options: true } },
+        },
+      }),
+      this.prisma.post.count({ where: { creatorId: creator.id } }),
+    ])
+
+    return { posts, total, pages: Math.ceil(total / limit), page }
+  }
 }
+
