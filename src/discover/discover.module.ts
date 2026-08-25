@@ -1,6 +1,7 @@
-﻿import { Module } from '@nestjs/common'
+import { Module } from '@nestjs/common'
 import { DiscoverController } from './discover.controller'
-import { CreatorsService } from '../creators/creators.service'
+import { DiscoverService } from './discover.service'
 
-@Module({ controllers: [DiscoverController], providers: [CreatorsService] })
+@Module({ controllers: [DiscoverController], providers: [DiscoverService] })
 export class DiscoverModule {}
+

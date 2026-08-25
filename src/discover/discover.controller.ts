@@ -1,11 +1,20 @@
-﻿import { Controller, Get, UseGuards } from '@nestjs/common'
+import { Controller, Get, Query, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser } from '../common/decorators/user.decorator'
-import { CreatorsService } from '../creators/creators.service'
+import { DiscoverService } from './discover.service'
 
 @Controller('discover')
 @UseGuards(JwtAuthGuard)
 export class DiscoverController {
-  constructor(private creators: CreatorsService) {}
-  @Get() discover(@CurrentUser() u: any) { return this.creators.discover(u.id) }
+  constructor(private discoverService: DiscoverService) {}
+
+  @Get()
+  discover(
+    @CurrentUser() u: any,
+    @Query('category') category?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.discoverService.discover(u.id, { category, search })
+  }
 }
+
