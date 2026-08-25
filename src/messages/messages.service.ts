@@ -23,7 +23,12 @@ export class MessagesService {
 
   async getConversations(userId: string) {
     const conversations = await this.prisma.conversation.findMany({
-      where: { subscriberId: userId },
+      where: {
+        OR: [
+          { subscriberId: userId },
+          { creator: { userId } },
+        ],
+      },
       orderBy: { lastMessageAt: 'desc' },
       include: {
         messages: {
@@ -33,6 +38,9 @@ export class MessagesService {
         },
         creator: {
           select: { id: true, displayName: true, handle: true, user: { select: { image: true } } },
+        },
+        subscriber: {
+          select: { id: true, username: true, firstName: true, lastName: true, image: true },
         },
       },
     })
@@ -48,7 +56,13 @@ export class MessagesService {
 
   async getMessages(userId: string, conversationId: string, page = 1, limit = 30) {
     const conversation = await this.prisma.conversation.findFirst({
-      where: { id: conversationId, subscriberId: userId },
+      where: {
+        id: conversationId,
+        OR: [
+          { subscriberId: userId },
+          { creator: { userId } },
+        ],
+      },
     })
     if (!conversation) return { error: 'Conversation not found.' }
 
@@ -57,8 +71,7 @@ export class MessagesService {
       this.prisma.message.findMany({
         where: { conversationId },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
+        skip, take: limit,
         include: {
           sender: { select: { id: true, username: true, firstName: true, lastName: true, image: true } },
         },
@@ -88,7 +101,13 @@ export class MessagesService {
     },
   ) {
     const conversation = await this.prisma.conversation.findFirst({
-      where: { id: conversationId, subscriberId: userId },
+      where: {
+        id: conversationId,
+        OR: [
+          { subscriberId: userId },
+          { creator: { userId } },
+        ],
+      },
       include: { creator: { select: { userId: true } } },
     })
     if (!conversation) return { error: 'Conversation not found.' }
@@ -121,7 +140,7 @@ export class MessagesService {
       data: { lastMessageAt: message.createdAt, lastMessageText: preview },
     })
 
-    const recipientId = conversation.creator.userId
+    const recipientId = userId === conversation.subscriberId ? conversation.creator.userId : conversation.subscriberId
     await redis.incr(keys.unreadCount(recipientId, conversationId))
     await redis.incr(keys.totalUnread(recipientId))
 
@@ -136,6 +155,7 @@ export class MessagesService {
 
     return { success: true, message }
   }
+
 
   async sendMessageRequest(userId: string, creatorId: string, messageText: string) {
     const creator = await this.prisma.creator.findUnique({
