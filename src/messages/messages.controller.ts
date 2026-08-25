@@ -39,6 +39,16 @@ export class MessagesController {
     return this.messages.getTotalUnread(user.id)
   }
 
+  @Get('followed-creators')
+  getFollowedCreators(@CurrentUser() user: any) {
+    return this.messages.getFollowedCreators(user.id)
+  }
+
+  @Get('requests/my')
+  getFanMessageRequests(@CurrentUser() user: any) {
+    return this.messages.getFanMessageRequests(user.id)
+  }
+
   @Get(':conversationId')
   getMessages(
     @CurrentUser() user: any,

@@ -195,6 +195,103 @@ export class MessagesService {
     return { success: true, conversationId: conversation.id }
   }
 
+  async getFollowedCreators(userId: string) {
+    const follows = await this.prisma.follow.findMany({
+      where: { userId },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+            handle: true,
+            user: { select: { image: true } },
+          },
+        },
+      },
+    })
+
+    const creatorIds = follows.map((f) => f.creator.id)
+
+    const [subscriptions, conversations, pendingRequests] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where: {
+          userId,
+          creatorId: { in: creatorIds },
+          status: 'ACTIVE',
+        },
+        select: {
+          creatorId: true,
+          amountPaid: true,
+          startedAt: true,
+          expiresAt: true,
+          subscriptionPlan: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              interval: true,
+            },
+          },
+        },
+      }),
+      this.prisma.conversation.findMany({
+        where: {
+          subscriberId: userId,
+          creatorId: { in: creatorIds },
+        },
+        select: { id: true, creatorId: true },
+      }),
+      this.prisma.messageRequest.findMany({
+        where: {
+          fromUserId: userId,
+          toCreatorId: { in: creatorIds },
+          status: 'PENDING',
+        },
+        select: { toCreatorId: true },
+      }),
+    ])
+
+    const subscriptionMap = new Map(
+      subscriptions.map((s) => [
+        s.creatorId,
+        {
+          planName: s.subscriptionPlan?.name ?? null,
+          planPrice: s.subscriptionPlan ? Number(s.subscriptionPlan.price) : null,
+          interval: s.subscriptionPlan?.interval ?? null,
+          startedAt: s.startedAt,
+          expiresAt: s.expiresAt,
+        },
+      ]),
+    )
+    const conversationMap = new Map(conversations.map((c) => [c.creatorId, c.id]))
+    const pendingSet = new Set(pendingRequests.map((r) => r.toCreatorId))
+
+    return follows.map((f) => ({
+      creator: f.creator,
+      isSubscribed: subscriptionMap.has(f.creator.id),
+      subscription: subscriptionMap.get(f.creator.id) ?? null,
+      conversationId: conversationMap.get(f.creator.id) ?? null,
+      hasPendingRequest: pendingSet.has(f.creator.id),
+    }))
+  }
+
+  async getFanMessageRequests(userId: string) {
+    return this.prisma.messageRequest.findMany({
+      where: { fromUserId: userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        toCreator: {
+          select: {
+            id: true,
+            displayName: true,
+            handle: true,
+            user: { select: { image: true } },
+          },
+        },
+      },
+    })
+  }
+
   async getTotalUnread(userId: string) {
     const count = await redis.get<number>(keys.totalUnread(userId))
     return { count: count ?? 0 }
