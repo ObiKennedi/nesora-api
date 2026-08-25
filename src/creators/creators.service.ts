@@ -186,4 +186,127 @@ export class CreatorsService {
       take: 30,
     })
   }
+
+  async getAudience(userId: string) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: { id: true, followersCount: true, subscribersCount: true },
+    })
+    if (!creator) {
+      return {
+        followers: [],
+        subscribers: [],
+        topFans: [],
+        stats: { followersCount: 0, subscribersCount: 0, topFansCount: 0 },
+      }
+    }
+
+    const [follows, subscribers, gifts, tips] = await Promise.all([
+      // 1. Followers
+      this.prisma.follow.findMany({
+        where: { creatorId: creator.id },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: { id: true, username: true, firstName: true, lastName: true, image: true },
+          },
+        },
+      }),
+      // 2. Active Paid Subscribers
+      this.prisma.subscription.findMany({
+        where: { creatorId: creator.id, status: 'ACTIVE' },
+        orderBy: { startedAt: 'desc' },
+        include: {
+          user: {
+            select: { id: true, username: true, firstName: true, lastName: true, image: true },
+          },
+          subscriptionPlan: {
+            select: { id: true, name: true, price: true, interval: true },
+          },
+        },
+      }),
+      // 3. Top spenders from gifts
+      this.prisma.giftTransaction.groupBy({
+        by: ['senderId'],
+        where: { creatorId: creator.id },
+        _sum: { amount: true },
+        _count: { id: true },
+        orderBy: { _sum: { amount: 'desc' } },
+        take: 50,
+      }),
+      // 4. Top spenders from tips
+      this.prisma.tip.groupBy({
+        by: ['fromUserId'],
+        where: { creatorId: creator.id },
+        _sum: { amount: true },
+        _count: { id: true },
+        orderBy: { _sum: { amount: 'desc' } },
+        take: 50,
+      }),
+    ])
+
+    // Merge gift + tip spend
+    const supporterMap = new Map<string, { totalSpend: number; giftCount: number }>()
+    for (const g of gifts) {
+      const existing = supporterMap.get(g.senderId) ?? { totalSpend: 0, giftCount: 0 }
+      existing.totalSpend += Number(g._sum.amount ?? 0)
+      existing.giftCount += g._count.id
+      supporterMap.set(g.senderId, existing)
+    }
+    for (const t of tips) {
+      const existing = supporterMap.get(t.fromUserId) ?? { totalSpend: 0, giftCount: 0 }
+      existing.totalSpend += Number(t._sum.amount ?? 0)
+      existing.giftCount += t._count.id
+      supporterMap.set(t.fromUserId, existing)
+    }
+
+    const topUserIds = Array.from(supporterMap.keys())
+    const topUsers =
+      topUserIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: topUserIds } },
+            select: { id: true, username: true, firstName: true, lastName: true, image: true },
+          })
+        : []
+
+    const userMap = new Map(topUsers.map((u) => [u.id, u]))
+
+    const sortedTopFans = Array.from(supporterMap.entries())
+      .map(([uid, stats]) => ({
+        user: userMap.get(uid),
+        totalSpend: stats.totalSpend,
+        giftCount: stats.giftCount,
+      }))
+      .filter((tf) => tf.user)
+      .sort((a, b) => b.totalSpend - a.totalSpend)
+      .map((tf, index) => ({
+        ...tf,
+        rank: index + 1,
+      }))
+
+    return {
+      followers: follows.map((f) => ({
+        id: f.id,
+        createdAt: f.createdAt,
+        user: f.user,
+      })),
+      subscribers: subscribers.map((s) => ({
+        id: s.id,
+        startedAt: s.startedAt,
+        expiresAt: s.expiresAt,
+        amountPaid: Number(s.amountPaid),
+        plan: s.subscriptionPlan
+          ? { ...s.subscriptionPlan, price: Number(s.subscriptionPlan.price) }
+          : null,
+        user: s.user,
+      })),
+      topFans: sortedTopFans,
+      stats: {
+        followersCount: creator.followersCount,
+        subscribersCount: creator.subscribersCount,
+        topFansCount: sortedTopFans.length,
+      },
+    }
+  }
 }
+

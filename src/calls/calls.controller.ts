@@ -19,6 +19,35 @@ class RespondToCallDto {
 export class CallsController {
   constructor(private calls: CallsService) {}
 
+  @Get('settings')
+  getSettings(@CurrentUser() user: any) {
+    return this.calls.getCallSettings(user.id)
+  }
+
+  @Post('settings')
+  updateSettings(
+    @CurrentUser() user: any,
+    @Body()
+    dto: {
+      availableForCalls?: boolean
+      voiceCallsEnabled?: boolean
+      videoCallsEnabled?: boolean
+      voiceCallRate?: number
+      videoCallRate?: number
+      topFanFreeCallCount?: number
+    },
+  ) {
+    return this.calls.updateCallSettings(user.id, dto)
+  }
+
+  @Get('creator-status/:conversationId')
+  getCreatorStatus(
+    @CurrentUser() user: any,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.calls.getCreatorCallStatus(user.id, conversationId)
+  }
+
   @Post('initiate')
   initiate(@CurrentUser() user: any, @Body() dto: InitiateCallDto) {
     return this.calls.initiateCall(user.id, dto.conversationId, dto.type)
@@ -43,3 +72,4 @@ export class CallsController {
     return this.calls.getCallHistory(user.id)
   }
 }
+

@@ -376,4 +376,114 @@ export class CallsService {
     })
     return calls
   }
+
+  // ── Call settings ──────────────────────────────────────────────────────────
+
+  async getCallSettings(userId: string) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        availableForCalls: true,
+        voiceCallsEnabled: true,
+        videoCallsEnabled: true,
+        voiceCallRate: true,
+        videoCallRate: true,
+        topFanFreeCallCount: true,
+      },
+    })
+    if (!creator) {
+      return {
+        availableForCalls: true,
+        voiceCallsEnabled: true,
+        videoCallsEnabled: true,
+        voiceCallRate: 0,
+        videoCallRate: 0,
+        topFanFreeCallCount: 5,
+      }
+    }
+
+    return {
+      availableForCalls: creator.availableForCalls ?? true,
+      voiceCallsEnabled: creator.voiceCallsEnabled ?? true,
+      videoCallsEnabled: creator.videoCallsEnabled ?? true,
+      voiceCallRate: creator.voiceCallRate ? Number(creator.voiceCallRate) : 0,
+      videoCallRate: creator.videoCallRate ? Number(creator.videoCallRate) : 0,
+      topFanFreeCallCount: creator.topFanFreeCallCount ?? 5,
+    }
+  }
+
+  async updateCallSettings(userId: string, data: {
+    availableForCalls?: boolean
+    voiceCallsEnabled?: boolean
+    videoCallsEnabled?: boolean
+    voiceCallRate?: number
+    videoCallRate?: number
+    topFanFreeCallCount?: number
+  }) {
+    let creator = await this.prisma.creator.findUnique({ where: { userId } })
+    if (!creator) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } })
+      creator = await this.prisma.creator.create({
+        data: {
+          userId,
+          displayName: user?.name || 'Creator',
+          handle: user?.username || `creator_${Date.now()}`,
+        },
+      })
+    }
+
+    await this.prisma.creator.update({
+      where: { id: creator.id },
+      data: {
+        ...(data.availableForCalls !== undefined ? { availableForCalls: data.availableForCalls } : {}),
+        ...(data.voiceCallsEnabled !== undefined ? { voiceCallsEnabled: data.voiceCallsEnabled } : {}),
+        ...(data.videoCallsEnabled !== undefined ? { videoCallsEnabled: data.videoCallsEnabled } : {}),
+        ...(data.voiceCallRate !== undefined ? { voiceCallRate: data.voiceCallRate } : {}),
+        ...(data.videoCallRate !== undefined ? { videoCallRate: data.videoCallRate } : {}),
+        ...(data.topFanFreeCallCount !== undefined ? { topFanFreeCallCount: data.topFanFreeCallCount } : {}),
+      },
+    })
+
+    return { success: true }
+  }
+
+  async getCreatorCallStatus(userId: string, conversationId: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, OR: [{ subscriberId: userId }, { creator: { userId } }] },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+            availableForCalls: true,
+            voiceCallsEnabled: true,
+            videoCallsEnabled: true,
+            voiceCallRate: true,
+            videoCallRate: true,
+            topFanFreeCallCount: true,
+            user: { select: { image: true } },
+          },
+        },
+      },
+    })
+    if (!conversation) throw new NotFoundException('Conversation not found.')
+
+    const creator = conversation.creator
+    const isTopFanUser = await isTopFan(this.prisma, creator.id, userId, creator.topFanFreeCallCount ?? 5)
+
+    return {
+      creatorId: creator.id,
+      creatorName: creator.displayName,
+      creatorImage: creator.user?.image,
+      availableForCalls: creator.availableForCalls ?? true,
+      voiceCallsEnabled: creator.voiceCallsEnabled ?? true,
+      videoCallsEnabled: creator.videoCallsEnabled ?? true,
+      voiceCallRatePerHour: creator.voiceCallRate ? Number(creator.voiceCallRate) : 0,
+      videoCallRatePerHour: creator.videoCallRate ? Number(creator.videoCallRate) : 0,
+      isFreeCall: isTopFanUser || (!creator.voiceCallRate && !creator.videoCallRate),
+      isTopFan: isTopFanUser,
+    }
+  }
 }
+
