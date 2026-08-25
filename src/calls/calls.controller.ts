@@ -19,8 +19,14 @@ class RespondToCallDto {
 export class CallsController {
   constructor(private calls: CallsService) {}
 
+  @Get('active-incoming')
+  getActiveIncomingCall(@CurrentUser() user: any) {
+    return this.calls.getActiveIncomingCall(user.id)
+  }
+
   @Get('settings')
   getSettings(@CurrentUser() user: any) {
+
     return this.calls.getCallSettings(user.id)
   }
 

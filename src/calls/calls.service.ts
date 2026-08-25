@@ -377,6 +377,37 @@ export class CallsService {
     return calls
   }
 
+  async getActiveIncomingCall(userId: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId } })
+    if (!creator) return null
+
+    // Check if there is an active RINGING call created in the last 60 seconds
+    const call = await this.prisma.call.findFirst({
+      where: {
+        creatorId: creator.id,
+        status: 'RINGING',
+        createdAt: { gte: new Date(Date.now() - 60000) },
+      },
+      include: {
+        fan: { select: { id: true, name: true, image: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!call) return null
+
+    return {
+      callId: call.id,
+      callType: call.type,
+      conversationId: call.conversationId,
+      callerName: call.fan?.name || 'Fan Member',
+      callerAvatar: call.fan?.image || '',
+      roomUrl: call.dailyRoomUrl,
+      createdAt: call.createdAt,
+    }
+  }
+
+
   // ── Call settings ──────────────────────────────────────────────────────────
 
   async getCallSettings(userId: string) {
